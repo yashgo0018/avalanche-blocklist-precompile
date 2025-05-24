@@ -230,25 +230,17 @@ func changeAdmin(accessibleState contract.AccessibleState, caller common.Address
 
 	newAdminAddress := inputStruct // CUSTOM CODE OPERATES ON INPUT
 
-	topics, data, err := PackAdminChangedEvent(newAdminAddress)
-	if err != nil {
+	blockNumber := accessibleState.GetBlockContext().Number().Uint64()
+
+	if err := SetAdmin(stateDB, newAdminAddress, blockNumber); err != nil {
 		return nil, remainingGas, err
 	}
+
 	// Charge the gas for emitting the event.
 	eventGasCost := GetAdminChangedEventGasCost()
 	if remainingGas, err = contract.DeductGas(remainingGas, eventGasCost); err != nil {
 		return nil, 0, err
 	}
-
-	// Emit the event
-	stateDB.AddLog(
-		ContractAddress,
-		topics,
-		data,
-		accessibleState.GetBlockContext().Number().Uint64(),
-	)
-
-	SetAdmin(stateDB, newAdminAddress)
 
 	// this function does not return an output, leave this one as is
 	packedOutput := []byte{}
@@ -257,11 +249,26 @@ func changeAdmin(accessibleState contract.AccessibleState, caller common.Address
 	return packedOutput, remainingGas, nil
 }
 
-func SetAdmin(stateDB contract.StateDB, address common.Address) {
+func SetAdmin(stateDB contract.StateDB, address common.Address, blockNumber uint64) error {
 	addressPadded := common.LeftPadBytes(address.Bytes(), common.HashLength)
 	addressHash := common.BytesToHash(addressPadded) // it is just converting to [32]bytes
 
+	topics, data, err := PackAdminChangedEvent(address)
+	if err != nil {
+		return err
+	}
+
+	// Emit the event
+	stateDB.AddLog(
+		ContractAddress,
+		topics,
+		data,
+		blockNumber,
+	)
+
 	stateDB.SetState(ContractAddress, adminStorageKeyHash, addressHash)
+
+	return nil
 }
 
 func ReadAdmin(stateDB contract.StateDB) common.Address {

@@ -60,6 +60,6 @@ func (*configurator) Configure(chainConfig precompileconfig.ChainConfig, cfg pre
 		return fmt.Errorf("expected config type %T, got %T: %v", &Config{}, cfg, cfg)
 	}
 
-	SetAdmin(state, config.AdminAddress)
+	_ = SetAdmin(state, config.AdminAddress, blockContext.Number().Uint64())
 	return nil
 }
