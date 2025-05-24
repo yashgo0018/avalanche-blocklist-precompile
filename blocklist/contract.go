@@ -95,8 +95,43 @@ func blockAddress(accessibleState contract.AccessibleState, caller common.Addres
 		return nil, remainingGas, err
 	}
 
+	userAddress := inputStruct // CUSTOM CODE OPERATES ON INPUT
+	if userAddress == caller {
+		return nil, remainingGas, fmt.Errorf("%w: cannot ban yourself", ErrUnauthorized)
+	}
+
 	// CUSTOM CODE STARTS HERE
-	_ = inputStruct // CUSTOM CODE OPERATES ON INPUT
+	stateDB := accessibleState.GetStateDB()
+
+	// check if the caller is the admin
+	adminAddress := ReadAdmin(stateDB)
+	if adminAddress != caller {
+		return nil, remainingGas, fmt.Errorf("%w: %s", ErrUnauthorized, caller)
+	}
+
+	eventData := AddressBlockedEventData{
+		Reason: "",
+	}
+
+	topics, data, err := PackAddressBlockedEvent(userAddress, eventData)
+	if err != nil {
+		return nil, remainingGas, err
+	}
+	// Charge the gas for emitting the event.
+	eventGasCost := GetAddressBlockedEventGasCost(eventData)
+	if remainingGas, err = contract.DeductGas(remainingGas, eventGasCost); err != nil {
+		return nil, 0, err
+	}
+
+	// Emit the event
+	stateDB.AddLog(
+		ContractAddress,
+		topics,
+		data,
+		accessibleState.GetBlockContext().Number().Uint64(),
+	)
+
+	ChangeBlockStatus(stateDB, userAddress, true)
 	// this function does not return an output, leave this one as is
 	packedOutput := []byte{}
 
@@ -309,6 +344,13 @@ func UnpackReadBlockListOutput(output []byte) (*big.Int, error) {
 	return unpacked, nil
 }
 
+func BoolToBigInt(b bool) *big.Int {
+	if b {
+		return big.NewInt(1)
+	}
+	return big.NewInt(0)
+}
+
 func readBlockList(accessibleState contract.AccessibleState, caller common.Address, addr common.Address, input []byte, suppliedGas uint64, readOnly bool) (ret []byte, remainingGas uint64, err error) {
 	if remainingGas, err = contract.DeductGas(suppliedGas, ReadBlockListGasCost); err != nil {
 		return nil, 0, err
@@ -322,9 +364,11 @@ func readBlockList(accessibleState contract.AccessibleState, caller common.Addre
 	}
 
 	// CUSTOM CODE STARTS HERE
-	_ = inputStruct // CUSTOM CODE OPERATES ON INPUT
+	stateDB := accessibleState.GetStateDB()
+	userAddress := inputStruct // CUSTOM CODE OPERATES ON INPUT
+	blocked := IsAddressBlocked(stateDB, userAddress)
 
-	var output *big.Int // CUSTOM CODE FOR AN OUTPUT
+	var output *big.Int = BoolToBigInt(blocked) // CUSTOM CODE FOR AN OUTPUT
 	packedOutput, err := PackReadBlockListOutput(output)
 	if err != nil {
 		return nil, remainingGas, err
@@ -368,7 +412,39 @@ func unblockAddress(accessibleState contract.AccessibleState, caller common.Addr
 	}
 
 	// CUSTOM CODE STARTS HERE
-	_ = inputStruct // CUSTOM CODE OPERATES ON INPUT
+	stateDB := accessibleState.GetStateDB()
+
+	// check if the caller is the admin
+	adminAddress := ReadAdmin(stateDB)
+	if adminAddress != caller {
+		return nil, remainingGas, fmt.Errorf("%w: %s", ErrUnauthorized, caller)
+	}
+
+	userAddress := inputStruct // CUSTOM CODE OPERATES ON INPUT
+	eventData := AddressUnblockedEventData{
+		Reason: "",
+	}
+
+	topics, data, err := PackAddressUnblockedEvent(userAddress, eventData)
+	if err != nil {
+		return nil, remainingGas, err
+	}
+	// Charge the gas for emitting the event.
+	eventGasCost := GetAddressUnblockedEventGasCost(eventData)
+	if remainingGas, err = contract.DeductGas(remainingGas, eventGasCost); err != nil {
+		return nil, 0, err
+	}
+
+	// Emit the event
+	stateDB.AddLog(
+		ContractAddress,
+		topics,
+		data,
+		accessibleState.GetBlockContext().Number().Uint64(),
+	)
+
+	ChangeBlockStatus(stateDB, userAddress, false)
+
 	// this function does not return an output, leave this one as is
 	packedOutput := []byte{}
 
