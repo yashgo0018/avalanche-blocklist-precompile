@@ -5,14 +5,18 @@
 package solidity
 
 import (
+	"context"
+	"fmt"
+	"github.com/ava-labs/subnet-evm/tests/utils"
 	"github.com/onsi/ginkgo/v2"
+	"time"
 )
 
 // Registers the Asynchronized Precompile Tests
 // Before running the tests, this function creates all subnets given in the genesis files
 // and then runs the hardhat tests for each one asynchronously if called with `ginkgo run -procs=`.
 func RegisterAsyncTests() {
-	/* Uncomment these if you want to use default hardhat tests
+	/* Uncomment these if you want to use default hardhat tests */
 	// Tests here assumes that the genesis files are in ./tests/precompile/genesis/
 	// with the name {precompile_name}.json
 	genesisFiles, err := utils.GetFilesAndAliases("./tests/precompile/genesis/*.json")
@@ -23,12 +27,20 @@ func RegisterAsyncTests() {
 		ginkgo.AbortSuite("No genesis files found")
 	}
 	subnetsSuite := utils.CreateSubnetsSuite(genesisFiles)
-	*/
+
 	_ = ginkgo.Describe("[Asynchronized Precompile Tests]", func() {
 		// Uncomment below and register the ping test first
 		// utils.RegisterPingTest()
 
 		// ADD YOUR PRECOMPILE HERE
+		ginkgo.It("hello world", ginkgo.Label("Precompile"), ginkgo.Label("HelloWorld"), func() {
+			ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+			defer cancel()
+
+			blockchainID := subnetsSuite.GetBlockchainID("hello_world")
+			runDefaultHardhatTests(ctx, blockchainID, "hello_world")
+		})
+
 		/*
 			ginkgo.It("your precompile", ginkgo.Label("Precompile"), ginkgo.Label("YourPrecompile"), func() {
 				ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
@@ -43,7 +55,7 @@ func RegisterAsyncTests() {
 	})
 }
 
-/* Uncomment this if you want to use default hardhat tests
+/* Uncomment this if you want to use default hardhat tests */
 //	Default parameters are:
 //
 // 1. Hardhat contract environment is located at ./contracts
@@ -55,4 +67,3 @@ func runDefaultHardhatTests(ctx context.Context, blockchainID, testName string) 
 	testPath := fmt.Sprintf("./test/%s.ts", testName)
 	utils.RunHardhatTests(ctx, blockchainID, cmdPath, testPath)
 }
-*/

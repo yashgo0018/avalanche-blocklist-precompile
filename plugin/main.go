@@ -13,7 +13,7 @@ import (
 	// that registers the precompile with the subnet-evm. Importing the precompile package here
 	// will cause the precompile to be registered with the subnet-evm.
 	// ADD YOUR PRECOMPILE HERE
-	//_ "github.com/ava-labs/precompile-evm/{yourprecompilepkg}"
+	_ "github.com/ava-labs/precompile-evm/helloworld"
 )
 
 const Version = "v0.3.1"
