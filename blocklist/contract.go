@@ -42,7 +42,6 @@ var (
 
 // Singleton StatefulPrecompiledContract and signatures.
 var (
-
 	// BlockListRawABI contains the raw ABI of BlockList contract.
 	//go:embed contract.abi
 	BlockListRawABI string
@@ -53,6 +52,8 @@ var (
 )
 
 var (
+	ErrUnauthorized = errors.New("unauthorized")
+
 	// storageKeyHash is the hash of the storage key "storageKey" in the contract storage.
 	// This is used to store the value of the greeting in the contract storage.
 	// It is important to use a unique key here to avoid conflicts with other storage keys
@@ -136,7 +137,36 @@ func changeAdmin(accessibleState contract.AccessibleState, caller common.Address
 	}
 
 	// CUSTOM CODE STARTS HERE
-	_ = inputStruct // CUSTOM CODE OPERATES ON INPUT
+	stateDB := accessibleState.GetStateDB()
+
+	// check if the caller is the admin
+	adminAddress := ReadAdmin(stateDB)
+	if adminAddress != caller {
+		return nil, remainingGas, fmt.Errorf("%w: %s", ErrUnauthorized, caller)
+	}
+
+	newAdminAddress := inputStruct // CUSTOM CODE OPERATES ON INPUT
+
+	topics, data, err := PackAdminChangedEvent(newAdminAddress)
+	if err != nil {
+		return nil, remainingGas, err
+	}
+	// Charge the gas for emitting the event.
+	eventGasCost := GetAdminChangedEventGasCost()
+	if remainingGas, err = contract.DeductGas(remainingGas, eventGasCost); err != nil {
+		return nil, 0, err
+	}
+
+	// Emit the event
+	stateDB.AddLog(
+		ContractAddress,
+		topics,
+		data,
+		accessibleState.GetBlockContext().Number().Uint64(),
+	)
+
+	SetAdmin(stateDB, newAdminAddress)
+
 	// this function does not return an output, leave this one as is
 	packedOutput := []byte{}
 
@@ -151,10 +181,10 @@ func SetAdmin(stateDB contract.StateDB, address common.Address) {
 	stateDB.SetState(ContractAddress, adminStorageKeyHash, addressHash)
 }
 
-func ReadAdmin(stateDB contract.StateDB) (common.Address, error) {
+func ReadAdmin(stateDB contract.StateDB) common.Address {
 	value := stateDB.GetState(ContractAddress, adminStorageKeyHash)
 	address := common.BytesToAddress(value.Bytes())
-	return address, nil
+	return address
 }
 
 // UnpackIsAdminInput attempts to unpack [input] into the common.Address type argument
