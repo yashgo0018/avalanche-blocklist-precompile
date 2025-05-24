@@ -23,11 +23,11 @@ const (
 	// You should set a gas cost for each function in your contract.
 	// Generally, you should not set gas costs very low as this may cause your network to be vulnerable to DoS attacks.
 	// There are some predefined gas costs in contract/utils.go that you can use.
-	BlockAddressGasCost   uint64 = 1 /* SET A GAS COST HERE */
-	ChangeAdminGasCost    uint64 = 1 /* SET A GAS COST HERE */
-	IsAdminGasCost        uint64 = 1 /* SET A GAS COST HERE */
-	ReadBlockListGasCost  uint64 = 1 /* SET A GAS COST HERE */
-	UnblockAddressGasCost uint64 = 1 /* SET A GAS COST HERE */
+	BlockAddressGasCost   uint64 = contract.ReadGasCostPerSlot + contract.WriteGasCostPerSlot /* SET A GAS COST HERE */
+	ChangeAdminGasCost    uint64 = contract.ReadGasCostPerSlot + contract.WriteGasCostPerSlot /* SET A GAS COST HERE */
+	IsAdminGasCost        uint64 = contract.ReadGasCostPerSlot                                /* SET A GAS COST HERE */
+	ReadBlockListGasCost  uint64 = contract.ReadGasCostPerSlot                                /* SET A GAS COST HERE */
+	UnblockAddressGasCost uint64 = contract.ReadGasCostPerSlot + contract.WriteGasCostPerSlot /* SET A GAS COST HERE */
 )
 
 // CUSTOM CODE STARTS HERE
