@@ -52,6 +52,14 @@ var (
 	BlockListPrecompile = createBlockListPrecompile()
 )
 
+var (
+	// storageKeyHash is the hash of the storage key "storageKey" in the contract storage.
+	// This is used to store the value of the greeting in the contract storage.
+	// It is important to use a unique key here to avoid conflicts with other storage keys
+	// like addresses, AllowList, etc.
+	adminStorageKeyHash = common.BytesToHash([]byte("adminStorageKey"))
+)
+
 // UnpackBlockAddressInput attempts to unpack [input] into the common.Address type argument
 // assumes that [input] does not include selector (omits first 4 func signature bytes)
 func UnpackBlockAddressInput(input []byte) (common.Address, error) {
@@ -134,6 +142,19 @@ func changeAdmin(accessibleState contract.AccessibleState, caller common.Address
 
 	// Return the packed output and the remaining gas
 	return packedOutput, remainingGas, nil
+}
+
+func SetAdmin(stateDB contract.StateDB, address common.Address) {
+	addressPadded := common.LeftPadBytes(address.Bytes(), common.HashLength)
+	addressHash := common.BytesToHash(addressPadded) // it is just converting to [32]bytes
+
+	stateDB.SetState(ContractAddress, adminStorageKeyHash, addressHash)
+}
+
+func ReadAdmin(stateDB contract.StateDB) (common.Address, error) {
+	value := stateDB.GetState(ContractAddress, adminStorageKeyHash)
+	address := common.BytesToAddress(value.Bytes())
+	return address, nil
 }
 
 // UnpackIsAdminInput attempts to unpack [input] into the common.Address type argument
