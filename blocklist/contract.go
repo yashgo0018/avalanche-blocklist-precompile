@@ -23,9 +23,9 @@ const (
 	// You should set a gas cost for each function in your contract.
 	// Generally, you should not set gas costs very low as this may cause your network to be vulnerable to DoS attacks.
 	// There are some predefined gas costs in contract/utils.go that you can use.
+	AdminGasCost          uint64 = contract.ReadGasCostPerSlot                                /* SET A GAS COST HERE */
 	BlockAddressGasCost   uint64 = contract.ReadGasCostPerSlot + contract.WriteGasCostPerSlot /* SET A GAS COST HERE */
 	ChangeAdminGasCost    uint64 = contract.ReadGasCostPerSlot + contract.WriteGasCostPerSlot /* SET A GAS COST HERE */
-	IsAdminGasCost        uint64 = contract.ReadGasCostPerSlot                                /* SET A GAS COST HERE */
 	ReadBlockListGasCost  uint64 = contract.ReadGasCostPerSlot                                /* SET A GAS COST HERE */
 	UnblockAddressGasCost uint64 = contract.ReadGasCostPerSlot + contract.WriteGasCostPerSlot /* SET A GAS COST HERE */
 )
@@ -62,10 +62,32 @@ var (
 	adminStorageKeyHash = common.BytesToHash([]byte("adminStorageKey"))
 )
 
-// UnpackBlockAddressInput attempts to unpack [input] into the common.Address type argument
-// assumes that [input] does not include selector (omits first 4 func signature bytes)
-func UnpackBlockAddressInput(input []byte) (common.Address, error) {
-	res, err := BlockListABI.UnpackInput("blockAddress", input, false)
+type BlockAddressInput struct {
+	Addr   common.Address
+	Reason string
+}
+
+type UnblockAddressInput struct {
+	Addr   common.Address
+	Reason string
+}
+
+// PackAdmin packs the include selector (first 4 func signature bytes).
+// This function is mostly used for tests.
+func PackAdmin() ([]byte, error) {
+	return BlockListABI.Pack("admin")
+}
+
+// PackAdminOutput attempts to pack given addr of type common.Address
+// to conform the ABI outputs.
+func PackAdminOutput(addr common.Address) ([]byte, error) {
+	return BlockListABI.PackOutput("admin", addr)
+}
+
+// UnpackAdminOutput attempts to unpack given [output] into the common.Address type output
+// assumes that [output] does not include selector (omits first 4 func signature bytes)
+func UnpackAdminOutput(output []byte) (common.Address, error) {
+	res, err := BlockListABI.Unpack("admin", output)
 	if err != nil {
 		return common.Address{}, err
 	}
@@ -73,11 +95,37 @@ func UnpackBlockAddressInput(input []byte) (common.Address, error) {
 	return unpacked, nil
 }
 
-// PackBlockAddress packs [addr] of type common.Address into the appropriate arguments for blockAddress.
-// the packed bytes include selector (first 4 func signature bytes).
-// This function is mostly used for tests.
-func PackBlockAddress(addr common.Address) ([]byte, error) {
-	return BlockListABI.Pack("blockAddress", addr)
+func admin(accessibleState contract.AccessibleState, caller common.Address, addr common.Address, input []byte, suppliedGas uint64, readOnly bool) (ret []byte, remainingGas uint64, err error) {
+	if remainingGas, err = contract.DeductGas(suppliedGas, AdminGasCost); err != nil {
+		return nil, 0, err
+	}
+	// no input provided for this function
+
+	// CUSTOM CODE STARTS HERE
+	stateDB := accessibleState.GetStateDB()
+	adminAddress := ReadAdmin(stateDB)
+
+	packedOutput, err := PackAdminOutput(adminAddress)
+	if err != nil {
+		return nil, remainingGas, err
+	}
+
+	// Return the packed output and the remaining gas
+	return packedOutput, remainingGas, nil
+}
+
+// UnpackBlockAddressInput attempts to unpack [input] as BlockAddressInput
+// assumes that [input] does not include selector (omits first 4 func signature bytes)
+func UnpackBlockAddressInput(input []byte) (BlockAddressInput, error) {
+	inputStruct := BlockAddressInput{}
+	err := BlockListABI.UnpackInputIntoInterface(&inputStruct, "blockAddress", input, false)
+
+	return inputStruct, err
+}
+
+// PackBlockAddress packs [inputStruct] of type BlockAddressInput into the appropriate arguments for blockAddress.
+func PackBlockAddress(inputStruct BlockAddressInput) ([]byte, error) {
+	return BlockListABI.Pack("blockAddress", inputStruct.Addr, inputStruct.Reason)
 }
 
 func blockAddress(accessibleState contract.AccessibleState, caller common.Address, addr common.Address, input []byte, suppliedGas uint64, readOnly bool) (ret []byte, remainingGas uint64, err error) {
@@ -95,8 +143,7 @@ func blockAddress(accessibleState contract.AccessibleState, caller common.Addres
 		return nil, remainingGas, err
 	}
 
-	userAddress := inputStruct // CUSTOM CODE OPERATES ON INPUT
-	if userAddress == caller {
+	if inputStruct.Addr == caller {
 		return nil, remainingGas, fmt.Errorf("%w: cannot ban yourself", ErrUnauthorized)
 	}
 
@@ -110,10 +157,10 @@ func blockAddress(accessibleState contract.AccessibleState, caller common.Addres
 	}
 
 	eventData := AddressBlockedEventData{
-		Reason: "",
+		Reason: inputStruct.Reason,
 	}
 
-	topics, data, err := PackAddressBlockedEvent(userAddress, eventData)
+	topics, data, err := PackAddressBlockedEvent(inputStruct.Addr, eventData)
 	if err != nil {
 		return nil, remainingGas, err
 	}
@@ -131,7 +178,7 @@ func blockAddress(accessibleState contract.AccessibleState, caller common.Addres
 		accessibleState.GetBlockContext().Number().Uint64(),
 	)
 
-	ChangeBlockStatus(stateDB, userAddress, true)
+	ChangeBlockStatus(stateDB, inputStruct.Addr, true)
 	// this function does not return an output, leave this one as is
 	packedOutput := []byte{}
 
@@ -249,66 +296,6 @@ func IsAddressBlocked(stateDB contract.StateDB, addr common.Address) bool {
 	return value[0] == 1
 }
 
-// UnpackIsAdminInput attempts to unpack [input] into the common.Address type argument
-// assumes that [input] does not include selector (omits first 4 func signature bytes)
-func UnpackIsAdminInput(input []byte) (common.Address, error) {
-	res, err := BlockListABI.UnpackInput("isAdmin", input, false)
-	if err != nil {
-		return common.Address{}, err
-	}
-	unpacked := *abi.ConvertType(res[0], new(common.Address)).(*common.Address)
-	return unpacked, nil
-}
-
-// PackIsAdmin packs [addr] of type common.Address into the appropriate arguments for isAdmin.
-// the packed bytes include selector (first 4 func signature bytes).
-// This function is mostly used for tests.
-func PackIsAdmin(addr common.Address) ([]byte, error) {
-	return BlockListABI.Pack("isAdmin", addr)
-}
-
-// PackIsAdminOutput attempts to pack given isAdmin of type bool
-// to conform the ABI outputs.
-func PackIsAdminOutput(isAdmin bool) ([]byte, error) {
-	return BlockListABI.PackOutput("isAdmin", isAdmin)
-}
-
-// UnpackIsAdminOutput attempts to unpack given [output] into the bool type output
-// assumes that [output] does not include selector (omits first 4 func signature bytes)
-func UnpackIsAdminOutput(output []byte) (bool, error) {
-	res, err := BlockListABI.Unpack("isAdmin", output)
-	if err != nil {
-		return false, err
-	}
-	unpacked := *abi.ConvertType(res[0], new(bool)).(*bool)
-	return unpacked, nil
-}
-
-func isAdmin(accessibleState contract.AccessibleState, caller common.Address, addr common.Address, input []byte, suppliedGas uint64, readOnly bool) (ret []byte, remainingGas uint64, err error) {
-	if remainingGas, err = contract.DeductGas(suppliedGas, IsAdminGasCost); err != nil {
-		return nil, 0, err
-	}
-	// attempts to unpack [input] into the arguments to the IsAdminInput.
-	// Assumes that [input] does not include selector
-	// You can use unpacked [inputStruct] variable in your code
-	inputStruct, err := UnpackIsAdminInput(input)
-	if err != nil {
-		return nil, remainingGas, err
-	}
-
-	// CUSTOM CODE STARTS HERE
-	_ = inputStruct // CUSTOM CODE OPERATES ON INPUT
-
-	var output bool // CUSTOM CODE FOR AN OUTPUT
-	packedOutput, err := PackIsAdminOutput(output)
-	if err != nil {
-		return nil, remainingGas, err
-	}
-
-	// Return the packed output and the remaining gas
-	return packedOutput, remainingGas, nil
-}
-
 // UnpackReadBlockListInput attempts to unpack [input] into the common.Address type argument
 // assumes that [input] does not include selector (omits first 4 func signature bytes)
 func UnpackReadBlockListInput(input []byte) (common.Address, error) {
@@ -378,22 +365,18 @@ func readBlockList(accessibleState contract.AccessibleState, caller common.Addre
 	return packedOutput, remainingGas, nil
 }
 
-// UnpackUnblockAddressInput attempts to unpack [input] into the common.Address type argument
+// UnpackUnblockAddressInput attempts to unpack [input] as UnblockAddressInput
 // assumes that [input] does not include selector (omits first 4 func signature bytes)
-func UnpackUnblockAddressInput(input []byte) (common.Address, error) {
-	res, err := BlockListABI.UnpackInput("unblockAddress", input, false)
-	if err != nil {
-		return common.Address{}, err
-	}
-	unpacked := *abi.ConvertType(res[0], new(common.Address)).(*common.Address)
-	return unpacked, nil
+func UnpackUnblockAddressInput(input []byte) (UnblockAddressInput, error) {
+	inputStruct := UnblockAddressInput{}
+	err := BlockListABI.UnpackInputIntoInterface(&inputStruct, "unblockAddress", input, false)
+
+	return inputStruct, err
 }
 
-// PackUnblockAddress packs [addr] of type common.Address into the appropriate arguments for unblockAddress.
-// the packed bytes include selector (first 4 func signature bytes).
-// This function is mostly used for tests.
-func PackUnblockAddress(addr common.Address) ([]byte, error) {
-	return BlockListABI.Pack("unblockAddress", addr)
+// PackUnblockAddress packs [inputStruct] of type UnblockAddressInput into the appropriate arguments for unblockAddress.
+func PackUnblockAddress(inputStruct UnblockAddressInput) ([]byte, error) {
+	return BlockListABI.Pack("unblockAddress", inputStruct.Addr, inputStruct.Reason)
 }
 
 func unblockAddress(accessibleState contract.AccessibleState, caller common.Address, addr common.Address, input []byte, suppliedGas uint64, readOnly bool) (ret []byte, remainingGas uint64, err error) {
@@ -420,12 +403,11 @@ func unblockAddress(accessibleState contract.AccessibleState, caller common.Addr
 		return nil, remainingGas, fmt.Errorf("%w: %s", ErrUnauthorized, caller)
 	}
 
-	userAddress := inputStruct // CUSTOM CODE OPERATES ON INPUT
 	eventData := AddressUnblockedEventData{
-		Reason: "",
+		Reason: inputStruct.Reason,
 	}
 
-	topics, data, err := PackAddressUnblockedEvent(userAddress, eventData)
+	topics, data, err := PackAddressUnblockedEvent(inputStruct.Addr, eventData)
 	if err != nil {
 		return nil, remainingGas, err
 	}
@@ -443,7 +425,7 @@ func unblockAddress(accessibleState contract.AccessibleState, caller common.Addr
 		accessibleState.GetBlockContext().Number().Uint64(),
 	)
 
-	ChangeBlockStatus(stateDB, userAddress, false)
+	ChangeBlockStatus(stateDB, inputStruct.Addr, false)
 
 	// this function does not return an output, leave this one as is
 	packedOutput := []byte{}
@@ -458,9 +440,9 @@ func createBlockListPrecompile() contract.StatefulPrecompiledContract {
 	var functions []*contract.StatefulPrecompileFunction
 
 	abiFunctionMap := map[string]contract.RunStatefulPrecompileFunc{
+		"admin":          admin,
 		"blockAddress":   blockAddress,
 		"changeAdmin":    changeAdmin,
-		"isAdmin":        isAdmin,
 		"readBlockList":  readBlockList,
 		"unblockAddress": unblockAddress,
 	}
