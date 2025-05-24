@@ -52,7 +52,8 @@ var (
 )
 
 var (
-	ErrUnauthorized = errors.New("unauthorized")
+	ErrUnauthorized           = errors.New("unauthorized")
+	BlockListStorageNameSpace = []byte("BLOCK") // creating namespacing using 5 bytes
 
 	// storageKeyHash is the hash of the storage key "storageKey" in the contract storage.
 	// This is used to store the value of the greeting in the contract storage.
@@ -185,6 +186,32 @@ func ReadAdmin(stateDB contract.StateDB) common.Address {
 	value := stateDB.GetState(ContractAddress, adminStorageKeyHash)
 	address := common.BytesToAddress(value.Bytes())
 	return address
+}
+
+func GetBlockListUserKey(address common.Address) common.Hash {
+	key := make([]byte, common.HashLength)
+	copy(key[:5], BlockListStorageNameSpace)
+	copy(key[5:], address.Bytes())
+
+	return common.BytesToHash(key)
+}
+
+func ChangeBlockStatus(stateDB contract.StateDB, address common.Address, isBlocked bool) {
+	key := GetBlockListUserKey(address)
+	value := common.BytesToHash([]byte{func() byte {
+		if isBlocked {
+			return 1
+		}
+		return 0
+	}()})
+
+	stateDB.SetState(ContractAddress, key, value)
+}
+
+func IsAddressBlocked(stateDB contract.StateDB, addr common.Address) bool {
+	key := GetBlockListUserKey(addr)
+	value := stateDB.GetState(ContractAddress, key)
+	return value[0] == 1
 }
 
 // UnpackIsAdminInput attempts to unpack [input] into the common.Address type argument
