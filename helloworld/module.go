@@ -15,7 +15,7 @@ import (
 )
 
 var _ contract.Configurator = &configurator{}
-s
+
 // ConfigKey is the key used in json config files to specify this precompile config.
 // must be unique across all precompiles.
 const ConfigKey = "helloWorldConfig"

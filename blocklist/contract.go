@@ -297,10 +297,10 @@ func ChangeBlockStatus(stateDB contract.StateDB, address common.Address, isBlock
 	stateDB.SetState(ContractAddress, key, value)
 }
 
-func IsAddressBlocked(stateDB contract.StateDB, addr common.Address) bool {
+func IsAddressBlocked(stateDB contract.StateDB, addr common.Address) *big.Int {
 	key := GetBlockListUserKey(addr)
 	value := stateDB.GetState(ContractAddress, key)
-	return value[0] == 1
+	return value.Big()
 }
 
 // UnpackReadBlockListInput attempts to unpack [input] into the common.Address type argument
@@ -362,8 +362,7 @@ func readBlockList(accessibleState contract.AccessibleState, caller common.Addre
 	userAddress := inputStruct // CUSTOM CODE OPERATES ON INPUT
 	blocked := IsAddressBlocked(stateDB, userAddress)
 
-	var output *big.Int = BoolToBigInt(blocked) // CUSTOM CODE FOR AN OUTPUT
-	packedOutput, err := PackReadBlockListOutput(output)
+	packedOutput, err := PackReadBlockListOutput(blocked)
 	if err != nil {
 		return nil, remainingGas, err
 	}
