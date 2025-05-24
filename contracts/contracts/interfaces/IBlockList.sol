@@ -10,14 +10,14 @@ interface IBlockList {
     function changeAdmin(address addr) external;
 
     // Set [addr] to be enabled on the precompile contract.
-    function blockAddress(address addr) external;
+    function blockAddress(address addr, string calldata reason) external;
 
     // Set [addr] to have the manager role over the precompile contract.
-    function unblockAddress(address addr) external;
+    function unblockAddress(address addr, string calldata reason) external;
 
     // Read the status of [addr].
     function readBlockList(address addr) external view returns (uint256 role);
 
-    // Read if the [addr] is admin
-    function isAdmin(address addr) external view returns (bool isAdmin);
+    // Read the admin address
+    function admin() external view returns (address addr);
 }
