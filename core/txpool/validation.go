@@ -29,6 +29,7 @@ package txpool
 import (
 	"crypto/sha256"
 	"fmt"
+	"github.com/ava-labs/subnet-evm/precompile/contracts/blocklist"
 	"math/big"
 
 	"github.com/ava-labs/libevm/common"
@@ -282,6 +283,13 @@ func ValidateTransactionWithState(tx *types.Transaction, signer types.Signer, op
 			return fmt.Errorf("%w: %s", vmerrors.ErrSenderAddressNotAllowListed, from)
 		}
 	}
+
+	// if params.GetRulesExtra(opts.Rules).IsPrecompileEnabled(blocklist.ContractAddress) {
+	isBlocked := blocklist.IsAddressBlocked(opts.State, from)
+	if isBlocked.Uint64() > 0 {
+		return fmt.Errorf("%w: %s", vmerrors.ErrSenderAddressBlocked, from)
+	}
+	// }
 
 	return nil
 }

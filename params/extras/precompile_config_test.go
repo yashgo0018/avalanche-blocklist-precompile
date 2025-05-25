@@ -5,6 +5,7 @@ package extras
 
 import (
 	"encoding/json"
+	"github.com/ava-labs/subnet-evm/precompile/contracts/blocklist"
 	"math/big"
 	"testing"
 
@@ -25,6 +26,7 @@ func TestVerifyWithChainConfig(t *testing.T) {
 	config := &copy
 	config.GenesisPrecompiles = Precompiles{
 		txallowlist.ConfigKey: txallowlist.NewConfig(utils.NewUint64(2), nil, nil, nil),
+		blocklist.ConfigKey:   blocklist.NewConfig(utils.NewUint64(0), common.HexToAddress("0x8db97C7cEcE249c2b98bDC0226Cc4C2A57BF52FC")),
 	}
 	config.PrecompileUpgrades = []PrecompileUpgrade{
 		{

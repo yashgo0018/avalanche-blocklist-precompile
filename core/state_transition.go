@@ -28,6 +28,7 @@ package core
 
 import (
 	"fmt"
+	"github.com/ava-labs/subnet-evm/precompile/contracts/blocklist"
 	"math"
 	"math/big"
 
@@ -362,7 +363,15 @@ func (st *StateTransition) preCheck() error {
 				return fmt.Errorf("%w: %s", vmerrors.ErrSenderAddressNotAllowListed, msg.From)
 			}
 		}
+
+		// if params.GetExtra(st.evm.ChainConfig()).IsPrecompileEnabled(blocklist.ContractAddress, st.evm.Context.Time) {
+		isBlocked := blocklist.IsAddressBlocked(st.state, msg.From)
+		if isBlocked.Uint64() > 0 {
+			return fmt.Errorf("%w: %s", vmerrors.ErrSenderAddressBlocked, msg.From)
+		}
+		// }
 	}
+
 	// Make sure that transaction gasFeeCap is greater than the baseFee (post london)
 	if st.evm.ChainConfig().IsLondon(st.evm.Context.BlockNumber) {
 		// Skip the checks if gas fields are zero and baseFee was explicitly disabled (eth_call)
